@@ -2,7 +2,11 @@ import os
 from PIL import Image
 import torch
 import numpy as np
-from transformers import AutoProcessor, LlavaForConditionalGeneration, InstructBlipProcessor, InstructBlipForConditionalGeneration, Qwen2_5_VLForConditionalGeneration
+from transformers import AutoProcessor, LlavaForConditionalGeneration, InstructBlipProcessor, InstructBlipForConditionalGeneration
+try:
+    from transformers import Qwen2_5_VLForConditionalGeneration
+except ImportError:
+    Qwen2_5_VLForConditionalGeneration = None
 import argparse
 from tqdm import tqdm
 import json
@@ -243,6 +247,11 @@ def main(args):
         processor = InstructBlipProcessor.from_pretrained(args.model_id)
         compute_dtype = torch.bfloat16
     elif args.model == 'qwen2_5':
+        if Qwen2_5_VLForConditionalGeneration is None:
+            raise ImportError(
+                "Qwen2.5-VL is not available in the installed transformers build. "
+                "Use llava/blip or install a transformers build with Qwen2.5-VL support."
+            )
         max_pixels = 256 * 28 * 28
         model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True).to(args.device)
         processor = AutoProcessor.from_pretrained(args.model_id, max_pixels=max_pixels)
