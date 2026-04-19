@@ -35,7 +35,8 @@ def gradient_attention_blip(image, prompt, general_prompt, model, processor):
     """
 
     # Prepare inputs
-    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+    compute_dtype = get_model_compute_dtype(model)
+    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
     outputs = model(**inputs, output_attentions=True)
 
     # Compute logits and loss
@@ -60,8 +61,8 @@ def gradient_attention_blip(image, prompt, general_prompt, model, processor):
 
 
     # Process Language Model attention maps
-    lm_att = lm_atts[LM_LAYER][0, :, -1, :NUM_IMG_TOKENS]
-    lm_grad = lm_att_grads[LM_LAYER][0, :, -1, :NUM_IMG_TOKENS]
+    lm_att = lm_atts[LM_LAYER][0, :, -1, :QFORMER_IMG_TOKENS]
+    lm_grad = lm_att_grads[LM_LAYER][0, :, -1, :QFORMER_IMG_TOKENS]
     lm_grad_att = (lm_att * F.relu(lm_grad)).mean(dim=0).unsqueeze(0).unsqueeze(0)
 
 
@@ -89,8 +90,9 @@ def rel_attention_blip(image, prompt, general_prompt, model, processor):
                 the relative attention map (specific/general)
     """
     # Prepare inputs
-    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
-    general_inputs = processor(images=image, text=general_prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+    compute_dtype = get_model_compute_dtype(model)
+    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
+    general_inputs = processor(images=image, text=general_prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
 
     outputs = model(**inputs, output_attentions=True)
     general_outputs = model(**general_inputs, output_attentions=True)
@@ -107,8 +109,8 @@ def rel_attention_blip(image, prompt, general_prompt, model, processor):
     general_q_former_att = general_q_former_atts[QFORMER_LAYER][0, :, :, 1:].mean(dim=0).unsqueeze(0)
 
     # Process Language Model attention maps (15th layer)
-    lm_atts = lm_atts[LM_LAYER][0, :, -1, :NUM_IMG_TOKENS].mean(dim=0).unsqueeze(0).unsqueeze(0)
-    general_lm_atts = general_lm_atts[LM_LAYER][0, :, -1, :NUM_IMG_TOKENS].mean(dim=0).unsqueeze(0).unsqueeze(0)
+    lm_atts = lm_atts[LM_LAYER][0, :, -1, :QFORMER_IMG_TOKENS].mean(dim=0).unsqueeze(0).unsqueeze(0)
+    general_lm_atts = general_lm_atts[LM_LAYER][0, :, -1, :QFORMER_IMG_TOKENS].mean(dim=0).unsqueeze(0).unsqueeze(0)
 
     # Compute combined attention maps
     att = torch.bmm(lm_atts, q_former_att).squeeze(1)
@@ -142,8 +144,9 @@ def pure_gradient_blip(image, prompt, general_prompt, model, processor):
               regions relevant to the specific prompt
     """
     # Process inputs
-    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
-    general_inputs = processor(images=image, text=general_prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+    compute_dtype = get_model_compute_dtype(model)
+    inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
+    general_inputs = processor(images=image, text=general_prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
     
     # Apply high pass filter
     high_pass = high_pass_filter(image, IMAGE_RESOLUTION, reduce=False)

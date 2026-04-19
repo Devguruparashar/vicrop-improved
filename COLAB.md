@@ -18,3 +18,4 @@ Notes:
 - `llava` and `blip` are much heavier and generally need a higher-memory GPU runtime.
 - The original `run_all.sh` is multi-GPU oriented; `colab_run_all.py` is the single-GPU Colab replacement.
 - For a RAM-aware LLaVA smoke test on TextVQA, use `smoke_test_llava_textvqa_rel_att.py`. It writes a tiny on-disk subset into `data/textvqa/data.json`, runs 4-bit LLaVA with a chosen method such as `rel_att` or `grad_att`, scores the result, and restores the full dataset file afterward.
+- For the same RAM-aware workflow on BLIP, use `smoke_test_blip_textvqa.py`. It follows the same subset/restore pattern and runs BLIP in 4-bit mode for Colab-friendly TextVQA smoke tests.

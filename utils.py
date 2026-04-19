@@ -80,6 +80,16 @@ def safe_divide(numerator, denominator, eps=1e-6):
     result = numerator / safe_denominator
     return np.nan_to_num(result, nan=0.0, posinf=0.0, neginf=0.0)
 
+def get_model_compute_dtype(model, default=torch.float16):
+    """
+    Best-effort dtype lookup so attribution code can match the model's active compute dtype.
+    """
+
+    dtype = getattr(model, "dtype", None)
+    if dtype in {torch.float16, torch.bfloat16, torch.float32}:
+        return dtype
+    return default
+
 def importance_edge_mask(shape, border_ratio=0.1, min_edge_weight=0.55):
     """
     Build a soft edge-suppression mask to reduce common border artifacts.

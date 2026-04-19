@@ -243,9 +243,31 @@ def main(args):
             ).to(args.device)
             compute_dtype = torch.bfloat16
     elif args.model == 'blip':
-        model = InstructBlipForConditionalGeneration.from_pretrained(args.model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True).to(args.device)
         processor = InstructBlipProcessor.from_pretrained(args.model_id)
-        compute_dtype = torch.bfloat16
+        if args.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+            model = InstructBlipForConditionalGeneration.from_pretrained(
+                args.model_id,
+                torch_dtype=torch.float16,
+                low_cpu_mem_usage=True,
+                quantization_config=quantization_config,
+                device_map="auto",
+            )
+            compute_dtype = torch.float16
+        else:
+            model = InstructBlipForConditionalGeneration.from_pretrained(
+                args.model_id,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+            ).to(args.device)
+            compute_dtype = torch.bfloat16
     elif args.model == 'qwen2_5':
         if Qwen2_5_VLForConditionalGeneration is None:
             raise ImportError(
