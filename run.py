@@ -14,7 +14,7 @@ from qwen2_5_methods import *
 from utils import *
 from info import *
 
-def vicrop_qa(model_name, method_name, image_path, question, model, processor, short_question):
+def vicrop_qa(model_name, method_name, image_path, question, model, processor, short_question, compute_dtype=torch.bfloat16):
     """
     Performs visual cropping and question answering using different attention methods.
     
@@ -57,7 +57,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
         general_prompt = f"<image>\nUSER: {general_question} Answer the question using a single word or phrase.\nASSISTANT:"
 
 
-        inputs = processor(prompt, image, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+        inputs = processor(prompt, image, return_tensors="pt", padding=True).to(model.device, compute_dtype)
         ori_generate_ids = model.generate(**inputs, max_new_tokens=20, do_sample=False)
         ori_generation = [i.split('ASSISTANT: ')[1] for i in processor.batch_decode(ori_generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)][0]
 
@@ -96,7 +96,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
             return ori_generation, ori_generation, bbox, crop_meta
 
         multi_prompt = f"<image><image>\nUSER: {question} Answer the question using a single word or phrase.\nASSISTANT:"
-        multi_inputs = processor(multi_prompt, [image, crop_image], return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+        multi_inputs = processor(multi_prompt, [image, crop_image], return_tensors="pt", padding=True).to(model.device, compute_dtype)
 
         multi_generate_ids = model.generate(**multi_inputs, max_new_tokens=20, do_sample=False)
         multi_generation = [i.split('ASSISTANT: ')[1] for i in processor.batch_decode(multi_generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)][0]
@@ -109,7 +109,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
         prompt = f"Question: {question} Short answer:"
         general_prompt = f"Question: {general_question} Short answer:"
 
-        inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+        inputs = processor(images=image, text=prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
         ori_generate_ids = model.generate(**inputs, max_new_tokens=20, do_sample=False)
         ori_generation = processor.batch_decode(ori_generate_ids, skip_special_tokens=True)[0]
 
@@ -147,7 +147,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
         if not crop_meta["did_crop"]:
             return ori_generation, ori_generation, bbox, crop_meta
 
-        multi_inputs = processor(images=[image, crop_image], text=prompt, return_tensors="pt", padding=True).to(model.device, torch.bfloat16)
+        multi_inputs = processor(images=[image, crop_image], text=prompt, return_tensors="pt", padding=True).to(model.device, compute_dtype)
 
         multi_generate_ids = model.generate(**multi_inputs, max_new_tokens=20, do_sample=False)
         multi_generation = processor.batch_decode(multi_generate_ids, skip_special_tokens=True)[0]
@@ -166,7 +166,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
         crop_image_str = encode_base64(crop_image)
 
         ori_messages = [{"role": "user", "content": [{"type": "image", "image": f'data:image;base64,{image_str}'}, {"type": "text", "text": prompt}]}]
-        ori_inputs = prepare_qwen2_5_input(ori_messages, processor).to(model.device, torch.bfloat16)
+        ori_inputs = prepare_qwen2_5_input(ori_messages, processor).to(model.device, compute_dtype)
         ori_generate_ids = model.generate(**ori_inputs, max_new_tokens=20, do_sample=False)
         ori_generate_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(ori_inputs.input_ids, ori_generate_ids)]
         ori_generation = processor.batch_decode(ori_generate_ids_trimmed, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
@@ -176,7 +176,7 @@ def vicrop_qa(model_name, method_name, image_path, question, model, processor, s
             return ori_generation, ori_generation, bbox, crop_meta, ori_num_img_tokens
 
         multi_messages = [{"role": "user", "content": [{"type": "image", "image": f'data:image;base64,{image_str}'}, {"type": "image", "image": f'data:image;base64,{crop_image_str}', }, {"type": "text", "text": prompt}]}]
-        multi_inputs = prepare_qwen2_5_input(multi_messages, processor).to(model.device, torch.bfloat16)
+        multi_inputs = prepare_qwen2_5_input(multi_messages, processor).to(model.device, compute_dtype)
         multi_generate_ids = model.generate(**multi_inputs, max_new_tokens=20, do_sample=False)
         num_img_tokens = sum(multi_inputs.input_ids[0] == 151655)
         multi_generate_ids_trimmed = [out_ids[len(in_ids) :] for in_ids, out_ids in zip(multi_inputs.input_ids, multi_generate_ids)]
@@ -211,16 +211,43 @@ def main(args):
     """
 
     if args.model == 'llava':
-        model = LlavaForConditionalGeneration.from_pretrained(args.model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True, attn_implementation="eager").to(args.device)
         processor = AutoProcessor.from_pretrained(args.model_id)
+        if args.load_in_4bit:
+            from transformers import BitsAndBytesConfig
+
+            quantization_config = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_use_double_quant=True,
+                bnb_4bit_quant_type="nf4",
+            )
+            model = LlavaForConditionalGeneration.from_pretrained(
+                args.model_id,
+                torch_dtype=torch.float16,
+                low_cpu_mem_usage=True,
+                attn_implementation="eager",
+                quantization_config=quantization_config,
+                device_map="auto",
+            )
+            compute_dtype = torch.float16
+        else:
+            model = LlavaForConditionalGeneration.from_pretrained(
+                args.model_id,
+                torch_dtype=torch.bfloat16,
+                low_cpu_mem_usage=True,
+                attn_implementation="eager",
+            ).to(args.device)
+            compute_dtype = torch.bfloat16
     elif args.model == 'blip':
         model = InstructBlipForConditionalGeneration.from_pretrained(args.model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True).to(args.device)
         processor = InstructBlipProcessor.from_pretrained(args.model_id)
+        compute_dtype = torch.bfloat16
     elif args.model == 'qwen2_5':
         max_pixels = 256 * 28 * 28
         model = Qwen2_5_VLForConditionalGeneration.from_pretrained(args.model_id, torch_dtype=torch.bfloat16, low_cpu_mem_usage=True).to(args.device)
         processor = AutoProcessor.from_pretrained(args.model_id, max_pixels=max_pixels)
         processor.image_processor.size["longest_edge"] = max_pixels # this is likely a bug in current transformers (4.50.0) library, passing in max_pixels to from_pretrained does not work
+        compute_dtype = torch.bfloat16
     
     if os.path.exists(args.question_path):
         with open(args.question_path, "r") as f:
@@ -247,10 +274,10 @@ def main(args):
             short_question = d["question"]
 
         if args.model == "qwen2_5":
-            ori_generation, crop_generation, bbox, crop_meta, num_img_tokens = vicrop_qa(args.model, args.method, image_path, question, model, processor, short_question)
+            ori_generation, crop_generation, bbox, crop_meta, num_img_tokens = vicrop_qa(args.model, args.method, image_path, question, model, processor, short_question, compute_dtype)
             d["num_img_tokens"] = int(num_img_tokens)
         else:
-            ori_generation, crop_generation, bbox, crop_meta = vicrop_qa(args.model, args.method, image_path, question, model, processor, short_question)
+            ori_generation, crop_generation, bbox, crop_meta = vicrop_qa(args.model, args.method, image_path, question, model, processor, short_question, compute_dtype)
 
         d["original_answer"] = ori_generation
         d["crop_answer"] = crop_generation
@@ -280,6 +307,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_path", type=str, default="./playground/data/results")
     parser.add_argument("--total_chunks", type=int, default=1)
     parser.add_argument("--chunk_id", type=int, default=0)
+    parser.add_argument("--load_in_4bit", action="store_true", help="Use 4-bit quantization for low-memory runs such as Colab smoke tests.")
     args = parser.parse_args()
 
     args.device = "cuda" if torch.cuda.is_available() else "cpu"
