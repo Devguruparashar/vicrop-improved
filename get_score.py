@@ -289,8 +289,8 @@ if __name__ == "__main__":
 
     args.models = ['llava', 'blip', 'qwen2_5']
 
-    args.methods = ['nocrop', 'rel_att', 'grad_att', 'grad', 'rel_att_high', 'grad_att_high', 'grad_high']
+    args.methods = ['nocrop', 'rel_att', 'grad_att', 'pure_grad', 'rel_att_high', 'grad_att_high', 'pure_grad_high']
 
-    args.tasks = ['textvqa', 'vstar', 'gqa', 'pope', 'aokvqa', 'docvqa', 'chartqa', 'infoqa']
+    args.tasks = ['textvqa', 'vstar', 'gqa', 'pope', 'aokvqa', 'docvqa', 'vqav2']
 
     main(args)
