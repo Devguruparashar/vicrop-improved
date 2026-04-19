@@ -17,4 +17,4 @@ Notes:
 - `qwen2_5` is the most practical default for Colab.
 - `llava` and `blip` are much heavier and generally need a higher-memory GPU runtime.
 - The original `run_all.sh` is multi-GPU oriented; `colab_run_all.py` is the single-GPU Colab replacement.
-- For a RAM-aware first smoke test of `llava + textvqa + rel_att`, use `smoke_test_llava_textvqa_rel_att.py`. It writes a tiny on-disk subset into `data/textvqa/data.json`, runs 4-bit LLaVA, scores the result, and restores the full dataset file afterward.
+- For a RAM-aware LLaVA smoke test on TextVQA, use `smoke_test_llava_textvqa_rel_att.py`. It writes a tiny on-disk subset into `data/textvqa/data.json`, runs 4-bit LLaVA with a chosen method such as `rel_att` or `grad_att`, scores the result, and restores the full dataset file afterward.

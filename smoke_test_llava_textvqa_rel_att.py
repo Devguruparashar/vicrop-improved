@@ -71,7 +71,7 @@ def run_command(cmd: list[str], cwd: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Low-memory smoke test for llava + textvqa + rel_att."
+        description="Low-memory smoke test for llava + textvqa with a chosen attribution method."
     )
     parser.add_argument(
         "--repo_root",
@@ -89,6 +89,12 @@ def main() -> None:
         "--save_path",
         default="./data/results",
         help="Directory where JSON outputs should be written.",
+    )
+    parser.add_argument(
+        "--method",
+        default="rel_att",
+        choices=["rel_att", "grad_att", "pure_grad", "rel_att_high", "grad_att_high", "pure_grad_high"],
+        help="Which LLaVA attribution method to run for the smoke test.",
     )
     parser.add_argument(
         "--python",
@@ -110,7 +116,7 @@ def main() -> None:
 
     results_dir = (repo_root / args.save_path).resolve()
     results_dir.mkdir(parents=True, exist_ok=True)
-    result_file = results_dir / "llava-textvqa-rel_att.json"
+    result_file = results_dir / f"llava-textvqa-{args.method}.json"
     if result_file.exists():
         result_file.unlink()
 
@@ -124,7 +130,7 @@ def main() -> None:
                 "--model",
                 "llava",
                 "--method",
-                "rel_att",
+                args.method,
                 "--save_path",
                 args.save_path,
                 "--load_in_4bit",
